@@ -49,7 +49,7 @@ final class KVServiceFactory {
             throw new IllegalArgumentException("Path is not a directory: " + data);
         }
 
-        return new StorageService(new StorageDao(data),port);
+        return new StorageService(new StorageDao(data), topology,port);
 
     }
 }
