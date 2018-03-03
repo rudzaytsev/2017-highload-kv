@@ -3,11 +3,9 @@ package ru.mail.polis.storage;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.ClientProtocolException;
-import org.apache.http.client.fluent.Request;
 import org.jetbrains.annotations.NotNull;
 import ru.mail.polis.KVService;
+import ru.mail.polis.storage.interaction.*;
 import ru.mail.polis.utils.Pair;
 import ru.mail.polis.utils.QueryParams;
 
@@ -20,11 +18,10 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 
 import static java.lang.Integer.parseInt;
-import static java.lang.String.*;
 import static ru.mail.polis.utils.QueryParams.*;
 
 /**
- * Created by rudolph on 04.02.18.
+ * Implements key-value storage main logic
  */
 public class StorageService implements KVService {
 
@@ -37,7 +34,7 @@ public class StorageService implements KVService {
   @NotNull
   private final DAO dao;
 
-  public StorageService(@NotNull DAO dao, Set<String> topology, int port) throws IOException {
+  public StorageService(@NotNull DAO dao, @NotNull Set<String> topology, int port) throws IOException {
     this.server = HttpServer.create(new InetSocketAddress(port), 0);
     this.topology = topology;
     this.dao = dao;
@@ -72,15 +69,32 @@ public class StorageService implements KVService {
   }
 
   private void deleteData(HttpExchange http, QueryParams params) throws IOException {
-    replicasExist(params.replicas);
+    if (replicasExist(params.replicas) && !topology.isEmpty()) {
+      Integer ack = params.replicas._1;
+      Integer from = params.replicas._2;
+      deleteDataFromNodes(params.id, ack - 1, from - 1);
+    }
     dao.delete(params.id);
     http.sendResponseHeaders(202, 0);
   }
 
+  private void deleteDataFromNodes(String id, int ack, int from) {
+    DeleteDataFromCluster.with(id, ack, from, getCurrentNodeAddress(), topology).run();
+  }
+
   private void upsertData(HttpExchange http, QueryParams params) throws IOException {
-    replicasExist(params.replicas);
-    dao.upsert(params.id, getData(params.id, http));
+    byte[] data = getData(params.id, http);
+    if (replicasExist(params.replicas) && !topology.isEmpty()) {
+      Integer ack = params.replicas._1;
+      Integer from = params.replicas._2;
+      upsertDataToAnotherNodes(params.id, data, ack - 1, from - 1);
+    }
+    dao.upsert(params.id, data);
     http.sendResponseHeaders(201, 0);
+  }
+
+  private void upsertDataToAnotherNodes(String id, byte[] data, int ack, int from) {
+    UpsertDataOnCluster.with(id, data, ack, from, getCurrentNodeAddress(), topology).run();
   }
 
   private void readData(HttpExchange http, String id, Pair<Integer, Integer> replicas) throws IOException, NotEnoughReplicasSentAcknowledge {
@@ -97,50 +111,16 @@ public class StorageService implements KVService {
     }
   }
 
-  private void readDataFromAnotherNodes(String id, Integer ack, Integer from) throws NotEnoughReplicasSentAcknowledge {
-    if (ack == 0) return;
+  private void readDataFromAnotherNodes(String id, int ack, int from) throws NotEnoughReplicasSentAcknowledge {
+    ReadDataFromCluster.with(id, ack, from, getCurrentNodeAddress(), topology).run();
+  }
 
+  private String getCurrentNodeAddress() {
     InetSocketAddress address = server.getAddress();
-    String currentNodeAddress = "http://localhost" + ":" + address.getPort();
-    int anotherNodesAcks = 0;
-    for (String nodeUrl : topology) {
-      if (nodeUrl.equals(currentNodeAddress))
-        continue;
-
-      try {
-        int statusCode = responseFromNode(nodeUrl, id).getStatusLine().getStatusCode();
-        if (statusCode == 200) {
-          anotherNodesAcks++;
-        }
-      }
-      catch (IOException e) {
-        e.printStackTrace();
-      }
-
-      if (anotherNodesAcks == from.intValue()) {
-        return;
-      }
-
-    }
-    throw new NotEnoughReplicasSentAcknowledge(
-      format("For GET command  should response %d/%d but was %d/%d", ack + 1, from + 1, anotherNodesAcks + 1, from + 1)
-    );
-
+    return "http://localhost" + ":" + address.getPort();
   }
 
-  private static class NotEnoughReplicasSentAcknowledge extends RuntimeException {
-    public NotEnoughReplicasSentAcknowledge(String message) {
-      super(message);
-    }
-  }
 
-  private HttpResponse responseFromNode(String nodeUrl, String id) throws IOException {
-    return Request.Get(entityUrl(nodeUrl, id)).execute().returnResponse();
-  }
-
-  private String entityUrl(String nodeUrl, String id) {
-    return nodeUrl + "/v0/entity?id=" + id;
-  }
 
   /**
    * Checks replicas values
