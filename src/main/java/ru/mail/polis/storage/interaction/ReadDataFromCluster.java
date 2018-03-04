@@ -5,7 +5,7 @@ import org.apache.http.client.fluent.Request;
 import ru.mail.polis.utils.Replicas;
 
 import java.io.IOException;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Represents read data from cluster operation
@@ -13,6 +13,7 @@ import java.util.Set;
 public class ReadDataFromCluster extends AbstractClusterInteraction {
 
   private String id;
+  private List<Integer> availableStatusCodes = Arrays.asList(200, 404);
 
   private ReadDataFromCluster(String id, Replicas replicas, String currentNodeAddress, Set<String> topology) {
     super(replicas, currentNodeAddress, topology);
@@ -25,8 +26,9 @@ public class ReadDataFromCluster extends AbstractClusterInteraction {
   }
 
   @Override
-  public int wellDoneStatusCode() {
-    return 200;
+  public boolean wellDone(int statusCode) {
+    return availableStatusCodes.contains(statusCode);
+
   }
 
   @Override

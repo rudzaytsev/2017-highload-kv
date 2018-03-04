@@ -24,9 +24,10 @@ public class DeleteDataFromCluster extends AbstractClusterInteraction {
     return Request.Delete(entityUrl(nodeUrl, id)).execute().returnResponse();
   }
 
+
   @Override
-  public int wellDoneStatusCode() {
-    return 202;
+  public boolean wellDone(int statusCode) {
+    return statusCode == 202;
   }
 
   @Override

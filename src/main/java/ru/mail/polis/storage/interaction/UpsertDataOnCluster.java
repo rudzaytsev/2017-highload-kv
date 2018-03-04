@@ -27,8 +27,8 @@ public class UpsertDataOnCluster extends AbstractClusterInteraction {
   }
 
   @Override
-  public int wellDoneStatusCode() {
-    return 201;
+  public boolean wellDone(int statusCode) {
+    return statusCode == 201;
   }
 
   @Override

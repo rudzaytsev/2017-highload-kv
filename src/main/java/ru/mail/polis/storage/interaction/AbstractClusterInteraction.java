@@ -26,7 +26,7 @@ public abstract class AbstractClusterInteraction implements ClusterInteraction {
 
   @Override
   public void run() throws NotEnoughReplicasSentAcknowledge {
-    if (replicas.ack <= 0) return;
+    if (replicas.from <= 0) return;
 
     int anotherNodesAcks = 0;
     for (String nodeUrl : topology) {
@@ -35,7 +35,7 @@ public abstract class AbstractClusterInteraction implements ClusterInteraction {
 
       try {
         int statusCode = makeRequest(nodeUrl).getStatusLine().getStatusCode();
-        if (statusCode == wellDoneStatusCode()) {
+        if (wellDone(statusCode)) {
           anotherNodesAcks++;
         }
       }
@@ -48,11 +48,12 @@ public abstract class AbstractClusterInteraction implements ClusterInteraction {
       }
 
     }
-    throw new NotEnoughReplicasSentAcknowledge(
-      format("For %s command  should response %d/%d but was %d/%d",
-             httpMethod(), replicas.ack + 1, replicas.from + 1, anotherNodesAcks + 1, replicas.from + 1)
-    );
-
+    if (anotherNodesAcks < replicas.ack) {
+      throw new NotEnoughReplicasSentAcknowledge(
+        format("For %s command  should response %d/%d but was %d/%d",
+          httpMethod(), replicas.ack + 1, replicas.from + 1, anotherNodesAcks + 1, replicas.from + 1)
+      );
+    }
   }
 
   protected abstract HttpResponse makeRequest(String nodeUrl) throws IOException;
