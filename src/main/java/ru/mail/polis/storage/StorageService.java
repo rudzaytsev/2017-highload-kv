@@ -6,8 +6,8 @@ import com.sun.net.httpserver.HttpServer;
 import org.jetbrains.annotations.NotNull;
 import ru.mail.polis.KVService;
 import ru.mail.polis.storage.interaction.*;
-import ru.mail.polis.utils.Pair;
 import ru.mail.polis.utils.QueryParams;
+import ru.mail.polis.utils.Replicas;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -69,40 +69,36 @@ public class StorageService implements KVService {
   }
 
   private void deleteData(HttpExchange http, QueryParams params) throws IOException {
-    if (replicasExist(params.replicas) && !topology.isEmpty()) {
-      Integer ack = params.replicas._1;
-      Integer from = params.replicas._2;
-      deleteDataFromNodes(params.id, ack - 1, from - 1);
+    Replicas replicas = params.replicas;
+    if (replicasExist(replicas) && !topology.isEmpty()) {
+      deleteDataFromNodes(params.id, replicas.otherReplicas());
     }
     dao.delete(params.id);
     http.sendResponseHeaders(202, 0);
   }
 
-  private void deleteDataFromNodes(String id, int ack, int from) {
-    DeleteDataFromCluster.with(id, ack, from, getCurrentNodeAddress(), topology).run();
+  private void deleteDataFromNodes(String id, Replicas replicas) {
+    DeleteDataFromCluster.with(id, replicas, getCurrentNodeAddress(), topology).run();
   }
 
   private void upsertData(HttpExchange http, QueryParams params) throws IOException {
     byte[] data = getData(params.id, http);
-    if (replicasExist(params.replicas) && !topology.isEmpty()) {
-      Integer ack = params.replicas._1;
-      Integer from = params.replicas._2;
-      upsertDataToAnotherNodes(params.id, data, ack - 1, from - 1);
+    Replicas replicas = params.replicas;
+    if (replicasExist(replicas) && !topology.isEmpty()) {
+      upsertDataToAnotherNodes(params.id, data, replicas.otherReplicas());
     }
     dao.upsert(params.id, data);
     http.sendResponseHeaders(201, 0);
   }
 
-  private void upsertDataToAnotherNodes(String id, byte[] data, int ack, int from) {
-    UpsertDataOnCluster.with(id, data, ack, from, getCurrentNodeAddress(), topology).run();
+  private void upsertDataToAnotherNodes(String id, byte[] data, Replicas replicas) {
+    UpsertDataOnCluster.with(id, data, replicas, getCurrentNodeAddress(), topology).run();
   }
 
-  private void readData(HttpExchange http, String id, Pair<Integer, Integer> replicas) throws IOException, NotEnoughReplicasSentAcknowledge {
+  private void readData(HttpExchange http, String id, Replicas replicas) throws IOException, NotEnoughReplicasSentAcknowledge {
 
     if (replicasExist(replicas) && !topology.isEmpty()) {
-      Integer ack = replicas._1;
-      Integer from = replicas._2;
-      readDataFromAnotherNodes(id, ack - 1, from - 1);
+      readDataFromAnotherNodes(id, replicas.otherReplicas());
     }
     byte[] data = dao.get(id);
     http.sendResponseHeaders(200, data.length);
@@ -111,8 +107,8 @@ public class StorageService implements KVService {
     }
   }
 
-  private void readDataFromAnotherNodes(String id, int ack, int from) throws NotEnoughReplicasSentAcknowledge {
-    ReadDataFromCluster.with(id, ack, from, getCurrentNodeAddress(), topology).run();
+  private void readDataFromAnotherNodes(String id, Replicas replicas) throws NotEnoughReplicasSentAcknowledge {
+    ReadDataFromCluster.with(id, replicas, getCurrentNodeAddress(), topology).run();
   }
 
   private String getCurrentNodeAddress() {
@@ -130,16 +126,14 @@ public class StorageService implements KVService {
    *         false if replicas parameter is null, otherwise an exception will be thrown
    * @throws IllegalArgumentException if replicas are not properly set
    */
-  private boolean replicasExist(Pair<Integer, Integer> replicas) {
+  private boolean replicasExist(Replicas replicas) {
     if (replicas == null)
       return false;
 
-    Integer ack = replicas._1;
-    Integer from = replicas._2;
-    if (ack <= 0) {
+    if (replicas.ack <= 0) {
       throw new IllegalArgumentException("Ack value should be positive");
     }
-    if (ack > from) {
+    if (replicas.ack > replicas.from) {
       throw new IllegalArgumentException("Ack value should be less or equal than From value");
     }
     return true;

@@ -3,19 +3,17 @@ package ru.mail.polis.utils;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Created by rudolph on 24.02.18.
+ * Represents valid query parameters
  */
 public class QueryParams {
 
   public static final String ID_PREFIX = "id=";
   public static final String REPLICAS_PREFIX = "replicas=";
 
-
   public final String id;
-  public final Pair<Integer, Integer> replicas;
+  public final Replicas replicas;
 
-
-  private QueryParams(String id, Pair<Integer, Integer> replicas) {
+  private QueryParams(String id, Replicas replicas) {
     this.id = id;
     this.replicas = replicas;
   }
@@ -47,7 +45,7 @@ public class QueryParams {
     try {
       Integer ack = Integer.parseInt(ackFrom[0]);
       Integer from = Integer.parseInt(ackFrom[1]);
-      return new QueryParams(id, new Pair<>(ack, from));
+      return new QueryParams(id, new Replicas(ack, from));
     }
     catch (NumberFormatException e) {
       throw new IllegalArgumentException("Elements of pair ack/from should have integer type", e);

@@ -2,6 +2,7 @@ package ru.mail.polis.storage.interaction;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.client.fluent.Request;
+import ru.mail.polis.utils.Replicas;
 
 import java.io.IOException;
 import java.util.Set;
@@ -13,8 +14,8 @@ public class DeleteDataFromCluster extends AbstractClusterInteraction {
 
   private String id;
 
-  private DeleteDataFromCluster(String id, int ack, int from, String currentNodeAddress, Set<String> topology) {
-    super(ack, from, currentNodeAddress, topology);
+  private DeleteDataFromCluster(String id, Replicas replicas, String currentNodeAddress, Set<String> topology) {
+    super(replicas, currentNodeAddress, topology);
     this.id = id;
   }
 
@@ -33,8 +34,8 @@ public class DeleteDataFromCluster extends AbstractClusterInteraction {
     return "DELETE";
   }
 
-  public static ClusterInteraction with(String id, int ack, int from, String currentNodeAddress, Set<String> topology) {
-    return new DeleteDataFromCluster(id, ack, from, currentNodeAddress, topology);
+  public static ClusterInteraction with(String id, Replicas replicas, String currentNodeAddress, Set<String> topology) {
+    return new DeleteDataFromCluster(id, replicas, currentNodeAddress, topology);
   }
 
 }

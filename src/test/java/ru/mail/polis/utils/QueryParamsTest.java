@@ -34,7 +34,7 @@ public class QueryParamsTest {
 
   @Test
   public void extractReplicasFromQueryWithManyParameters() throws Exception {
-    Pair<Integer, Integer> expected = new Pair<>(3,2);
+    Replicas expected = new Replicas(3,2);
     assertEquals(expected, extractQuery("id=77&replicas=3/2").replicas);
   }
 

@@ -2,6 +2,7 @@ package ru.mail.polis.storage.interaction;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.client.fluent.Request;
+import ru.mail.polis.utils.Replicas;
 
 import java.io.IOException;
 import java.util.Set;
@@ -14,8 +15,8 @@ public class UpsertDataOnCluster extends AbstractClusterInteraction {
   private String id;
   private byte[] data;
 
-  private UpsertDataOnCluster(String id, byte[] data, int ack, int from, String currentNodeAddress, Set<String> topology) {
-    super(ack, from, currentNodeAddress, topology);
+  private UpsertDataOnCluster(String id, byte[] data, Replicas replicas, String currentNodeAddress, Set<String> topology) {
+    super(replicas, currentNodeAddress, topology);
     this.data = data;
     this.id = id;
   }
@@ -35,7 +36,7 @@ public class UpsertDataOnCluster extends AbstractClusterInteraction {
     return "PUT";
   }
 
-  public static ClusterInteraction with(String id, byte[] data, int ack, int from, String currentNodeAddress, Set<String> topology) {
-    return new UpsertDataOnCluster(id, data, ack, from, currentNodeAddress, topology);
+  public static ClusterInteraction with(String id, byte[] data, Replicas replicas, String currentNodeAddress, Set<String> topology) {
+    return new UpsertDataOnCluster(id, data, replicas, currentNodeAddress, topology);
   }
 }

@@ -1,6 +1,7 @@
 package ru.mail.polis.storage.interaction;
 
 import org.apache.http.HttpResponse;
+import ru.mail.polis.utils.Replicas;
 
 import java.io.IOException;
 import java.util.Set;
@@ -13,21 +14,19 @@ import static java.lang.String.format;
  */
 public abstract class AbstractClusterInteraction implements ClusterInteraction {
 
-  private int ack;
-  private int from;
+  private Replicas replicas;
   private String currentNodeAddress;
   private Set<String> topology;
 
-  public AbstractClusterInteraction(int ack, int from, String currentNodeAddress, Set<String> topology) {
-    this.ack = ack;
-    this.from = from;
+  public AbstractClusterInteraction(Replicas replicas, String currentNodeAddress, Set<String> topology) {
+    this.replicas = replicas;
     this.currentNodeAddress = currentNodeAddress;
     this.topology = topology;
   }
 
   @Override
   public void run() throws NotEnoughReplicasSentAcknowledge {
-    if (ack == 0) return;
+    if (replicas.ack <= 0) return;
 
     int anotherNodesAcks = 0;
     for (String nodeUrl : topology) {
@@ -44,13 +43,14 @@ public abstract class AbstractClusterInteraction implements ClusterInteraction {
         e.printStackTrace();
       }
 
-      if (anotherNodesAcks == from) {
+      if (anotherNodesAcks == replicas.from) {
         return;
       }
 
     }
     throw new NotEnoughReplicasSentAcknowledge(
-      format("For %s command  should response %d/%d but was %d/%d", httpMethod(), ack + 1, from + 1, anotherNodesAcks + 1, from + 1)
+      format("For %s command  should response %d/%d but was %d/%d",
+             httpMethod(), replicas.ack + 1, replicas.from + 1, anotherNodesAcks + 1, replicas.from + 1)
     );
 
   }
