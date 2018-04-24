@@ -15,15 +15,15 @@ public class UpsertDataOnCluster extends AbstractClusterInteraction {
   private String id;
   private byte[] data;
 
-  private UpsertDataOnCluster(String id, byte[] data, Replicas replicas, String currentNodeAddress, Set<String> topology) {
-    super(replicas, currentNodeAddress, topology);
+  private UpsertDataOnCluster(String id, byte[] data, Replicas replicas, Set<String> topology) {
+    super(replicas, topology);
     this.data = data;
     this.id = id;
   }
 
   @Override
   protected HttpResponse makeRequest(String nodeUrl) throws IOException {
-    return Request.Put(entityUrl(nodeUrl, id)).bodyByteArray(data).execute().returnResponse();
+    return Request.Put(internalUrl(nodeUrl, id)).bodyByteArray(data).execute().returnResponse();
   }
 
   @Override
@@ -36,7 +36,7 @@ public class UpsertDataOnCluster extends AbstractClusterInteraction {
     return "PUT";
   }
 
-  public static ClusterInteraction with(String id, byte[] data, Replicas replicas, String currentNodeAddress, Set<String> topology) {
-    return new UpsertDataOnCluster(id, data, replicas, currentNodeAddress, topology);
+  public static ClusterInteraction with(String id, byte[] data, Replicas replicas, Set<String> topology) {
+    return new UpsertDataOnCluster(id, data, replicas, topology);
   }
 }

@@ -3,6 +3,7 @@ package ru.mail.polis.storage;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import org.apache.http.HttpResponse;
 import org.jetbrains.annotations.NotNull;
 import ru.mail.polis.KVService;
 import ru.mail.polis.storage.interaction.*;
@@ -16,6 +17,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.concurrent.*;
 
 import static java.lang.Integer.parseInt;
 import static ru.mail.polis.utils.QueryParams.*;
@@ -35,7 +37,8 @@ public class StorageService implements KVService {
   private final DAO dao;
 
   public StorageService(@NotNull DAO dao, @NotNull Set<String> topology, int port) throws IOException {
-    this.server = HttpServer.create(new InetSocketAddress(port), 0);
+    this.server = HttpServer.create(new InetSocketAddress(port), 5);
+    server.setExecutor(new ThreadPoolExecutor(4, 10, 3, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(30)));
     this.topology = topology;
     this.dao = dao;
     initMapping();
@@ -44,6 +47,49 @@ public class StorageService implements KVService {
   private void initMapping() {
     server.createContext("/v0/status", this::status);
     server.createContext("/v0/entity", this::entity);
+    server.createContext("/v0/internal", this::internal);
+  }
+
+  private void internal(HttpExchange exchange) throws IOException {
+    new ErrorHandler(this::singleNodeRequest).handle(exchange);
+  }
+
+  private void singleNodeRequest(HttpExchange http) throws IOException {
+    String query = http.getRequestURI().getQuery();
+    QueryParams params = extractQuery(query);
+    String httpMethod = http.getRequestMethod();
+    if ("GET".equals(httpMethod)) {
+      readDataFromNode(http, params.id);
+    }
+    else if ("PUT".equals(httpMethod)) {
+      upsertDataFromNode(http, params);
+    }
+    else if ("DELETE".equals(httpMethod)) {
+      deleteDataFromNode(http, params);
+    }
+    else {
+      http.sendResponseHeaders(405, 0);
+    }
+
+  }
+
+  private void deleteDataFromNode(HttpExchange http, QueryParams params) throws IOException {
+    dao.delete(params.id);
+    http.sendResponseHeaders(202, 0);
+  }
+
+  private void upsertDataFromNode(HttpExchange http, QueryParams params) throws IOException {
+    byte[] data = getData(params.id, http);
+    dao.upsert(params.id, data);
+    http.sendResponseHeaders(201, 0);
+  }
+
+  private void readDataFromNode(HttpExchange http, String id) throws IOException {
+    byte[] data = dao.get(id);
+    http.sendResponseHeaders(200, data.length);
+    try (OutputStream out = http.getResponseBody()) {
+      out.write(data);
+    }
   }
 
   private void entity(HttpExchange exchange) throws IOException, NotEnoughReplicasSentAcknowledge {
@@ -71,51 +117,51 @@ public class StorageService implements KVService {
   private void deleteData(HttpExchange http, QueryParams params) throws IOException {
     Replicas replicas = params.replicas;
     if (replicasExist(replicas) && !topology.isEmpty()) {
-      deleteDataFromNodes(params.id, replicas.otherReplicas());
+      deleteDataFromCluster(params.id, replicas);
+      http.sendResponseHeaders(202, 0);
     }
-    dao.delete(params.id);
-    http.sendResponseHeaders(202, 0);
+    else {
+      deleteDataFromNode(http, params);
+    }
+
   }
 
-  private void deleteDataFromNodes(String id, Replicas replicas) {
-    DeleteDataFromCluster.with(id, replicas, getCurrentNodeAddress(), topology).run();
+  private HttpResponse deleteDataFromCluster(String id, Replicas replicas) {
+    return DeleteDataFromCluster.with(id, replicas, topology).run();
   }
 
   private void upsertData(HttpExchange http, QueryParams params) throws IOException {
-    byte[] data = getData(params.id, http);
     Replicas replicas = params.replicas;
     if (replicasExist(replicas) && !topology.isEmpty()) {
-      upsertDataToAnotherNodes(params.id, data, replicas.otherReplicas());
+      byte[] data = getData(params.id, http);
+      upsertDataToCluster(params.id, data, replicas);
+      http.sendResponseHeaders(201, 0);
     }
-    dao.upsert(params.id, data);
-    http.sendResponseHeaders(201, 0);
+    else {
+      upsertDataFromNode(http, params);
+    }
   }
 
-  private void upsertDataToAnotherNodes(String id, byte[] data, Replicas replicas) {
-    UpsertDataOnCluster.with(id, data, replicas, getCurrentNodeAddress(), topology).run();
+  private HttpResponse upsertDataToCluster(String id, byte[] data, Replicas replicas) {
+    return UpsertDataOnCluster.with(id, data, replicas, topology).run();
   }
 
   private void readData(HttpExchange http, String id, Replicas replicas) throws IOException, NotEnoughReplicasSentAcknowledge {
-
     if (replicasExist(replicas) && !topology.isEmpty()) {
-      readDataFromAnotherNodes(id, replicas.otherReplicas());
+      HttpResponse resp = readDataFromCluster(id, replicas);
+      http.sendResponseHeaders(resp.getStatusLine().getStatusCode(), resp.getEntity().getContentLength());
+      try (OutputStream out = http.getResponseBody()) {
+        resp.getEntity().writeTo(out);
+      }
     }
-    byte[] data = dao.get(id);
-    http.sendResponseHeaders(200, data.length);
-    try (OutputStream out = http.getResponseBody()) {
-      out.write(data);
+    else {
+      readDataFromNode(http, id);
     }
   }
 
-  private void readDataFromAnotherNodes(String id, Replicas replicas) throws NotEnoughReplicasSentAcknowledge {
-    ReadDataFromCluster.with(id, replicas, getCurrentNodeAddress(), topology).run();
+  private HttpResponse readDataFromCluster(String id, Replicas replicas) throws NotEnoughReplicasSentAcknowledge {
+    return ReadDataFromCluster.with(id, replicas, topology).run();
   }
-
-  private String getCurrentNodeAddress() {
-    InetSocketAddress address = server.getAddress();
-    return "http://localhost" + ":" + address.getPort();
-  }
-
 
 
   /**

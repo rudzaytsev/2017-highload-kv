@@ -14,14 +14,14 @@ public class DeleteDataFromCluster extends AbstractClusterInteraction {
 
   private String id;
 
-  private DeleteDataFromCluster(String id, Replicas replicas, String currentNodeAddress, Set<String> topology) {
-    super(replicas, currentNodeAddress, topology);
+  private DeleteDataFromCluster(String id, Replicas replicas, Set<String> topology) {
+    super(replicas, topology);
     this.id = id;
   }
 
   @Override
   protected HttpResponse makeRequest(String nodeUrl) throws IOException {
-    return Request.Delete(entityUrl(nodeUrl, id)).execute().returnResponse();
+    return Request.Delete(internalUrl(nodeUrl, id)).execute().returnResponse();
   }
 
 
@@ -35,8 +35,8 @@ public class DeleteDataFromCluster extends AbstractClusterInteraction {
     return "DELETE";
   }
 
-  public static ClusterInteraction with(String id, Replicas replicas, String currentNodeAddress, Set<String> topology) {
-    return new DeleteDataFromCluster(id, replicas, currentNodeAddress, topology);
+  public static ClusterInteraction with(String id, Replicas replicas, Set<String> topology) {
+    return new DeleteDataFromCluster(id, replicas, topology);
   }
 
 }

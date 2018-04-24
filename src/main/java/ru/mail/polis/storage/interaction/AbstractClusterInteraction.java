@@ -4,6 +4,8 @@ import org.apache.http.HttpResponse;
 import ru.mail.polis.utils.Replicas;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import static java.lang.String.format;
@@ -15,51 +17,49 @@ import static java.lang.String.format;
 public abstract class AbstractClusterInteraction implements ClusterInteraction {
 
   private Replicas replicas;
-  private String currentNodeAddress;
   private Set<String> topology;
 
-  public AbstractClusterInteraction(Replicas replicas, String currentNodeAddress, Set<String> topology) {
+  public AbstractClusterInteraction(Replicas replicas, Set<String> topology) {
     this.replicas = replicas;
-    this.currentNodeAddress = currentNodeAddress;
     this.topology = topology;
   }
 
   @Override
-  public void run() throws NotEnoughReplicasSentAcknowledge {
-    if (replicas.from <= 0) return;
+  public HttpResponse run() throws NotEnoughReplicasSentAcknowledge {
+    if (replicas.from <= 0) return null;
 
-    int anotherNodesAcks = 0;
+    List<HttpResponse> succeedResponses = new ArrayList<>();
     for (String nodeUrl : topology) {
-      if (nodeUrl.equals(currentNodeAddress))
-        continue;
 
       try {
-        int statusCode = makeRequest(nodeUrl).getStatusLine().getStatusCode();
+        HttpResponse response = makeRequest(nodeUrl);
+        int statusCode = response.getStatusLine().getStatusCode();
         if (wellDone(statusCode)) {
-          anotherNodesAcks++;
+          succeedResponses.add(response);
         }
       }
       catch (IOException e) {
         e.printStackTrace();
       }
 
-      if (anotherNodesAcks == replicas.from) {
-        return;
+      if (succeedResponses.size() == replicas.from) {
+        return succeedResponses.get(0);
       }
 
     }
-    if (anotherNodesAcks < replicas.ack) {
+    if (succeedResponses.size() < replicas.ack) {
       throw new NotEnoughReplicasSentAcknowledge(
         format("For %s command  should response %d/%d but was %d/%d",
-          httpMethod(), replicas.ack + 1, replicas.from + 1, anotherNodesAcks + 1, replicas.from + 1)
+          httpMethod(), replicas.ack, replicas.from, succeedResponses.size(), replicas.from)
       );
     }
+    return null;
   }
 
   protected abstract HttpResponse makeRequest(String nodeUrl) throws IOException;
 
-  String entityUrl(String nodeUrl, String id) {
-    return nodeUrl + "/v0/entity?id=" + id;
+  String internalUrl(String nodeUrl, String id) {
+    return nodeUrl + "/v0/internal?id=" + id;
   }
 
 

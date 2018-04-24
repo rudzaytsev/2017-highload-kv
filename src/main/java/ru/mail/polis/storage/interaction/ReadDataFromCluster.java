@@ -15,20 +15,19 @@ public class ReadDataFromCluster extends AbstractClusterInteraction {
   private String id;
   private List<Integer> availableStatusCodes = Arrays.asList(200, 404);
 
-  private ReadDataFromCluster(String id, Replicas replicas, String currentNodeAddress, Set<String> topology) {
-    super(replicas, currentNodeAddress, topology);
+  private ReadDataFromCluster(String id, Replicas replicas, Set<String> topology) {
+    super(replicas, topology);
     this.id = id;
   }
 
   @Override
   protected HttpResponse makeRequest(String nodeUrl) throws IOException {
-    return Request.Get(entityUrl(nodeUrl, id)).execute().returnResponse();
+    return Request.Get(internalUrl(nodeUrl, id)).execute().returnResponse();
   }
 
   @Override
   public boolean wellDone(int statusCode) {
     return availableStatusCodes.contains(statusCode);
-
   }
 
   @Override
@@ -36,8 +35,8 @@ public class ReadDataFromCluster extends AbstractClusterInteraction {
     return "GET";
   }
 
-  public static ClusterInteraction with(String id, Replicas replicas, String currentNodeAddress, Set<String> topology) {
-    return new ReadDataFromCluster(id, replicas, currentNodeAddress, topology);
+  public static ClusterInteraction with(String id, Replicas replicas, Set<String> topology) {
+    return new ReadDataFromCluster(id, replicas, topology);
   }
 
 }
