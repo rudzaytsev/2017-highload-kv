@@ -9,13 +9,15 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.*;
 
+import static org.apache.http.HttpStatus.*;
+
 /**
  * Represents read data from cluster operation
  */
 public class ReadDataFromCluster extends AbstractClusterInteraction {
 
   private String id;
-  private List<Integer> availableStatusCodes = Arrays.asList(200, 404);
+  private List<Integer> availableStatusCodes = Arrays.asList(SC_OK, SC_NOT_FOUND);
 
   private Tombstone tombstone = new Tombstone();
 
@@ -46,18 +48,19 @@ public class ReadDataFromCluster extends AbstractClusterInteraction {
   }
 
   private boolean notFound(HttpResponse response) {
-    return response.getStatusLine().getStatusCode() == 404;
+    return response.getStatusLine().getStatusCode() == SC_NOT_FOUND;
   }
 
   private boolean ok(HttpResponse response) {
-    return response.getStatusLine().getStatusCode() == 200;
+    return response.getStatusLine().getStatusCode() == SC_OK;
   }
 
   private byte[] getResponseContent(HttpResponse response) {
     final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
     try {
       response.getEntity().writeTo(byteArrayOutputStream);
-    } catch (IOException e) {
+    }
+    catch (IOException e) {
       return new byte[]{};
     }
     return byteArrayOutputStream.toByteArray();

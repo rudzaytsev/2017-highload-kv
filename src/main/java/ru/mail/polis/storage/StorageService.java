@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import org.apache.http.HttpResponse;
+
 import org.jetbrains.annotations.NotNull;
 import ru.mail.polis.KVService;
 import ru.mail.polis.storage.interaction.*;
@@ -15,11 +16,11 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 import java.net.InetSocketAddress;
-import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.*;
 
 import static java.lang.Integer.parseInt;
+import static org.apache.http.HttpStatus.*;
 import static ru.mail.polis.utils.QueryParams.*;
 
 /**
@@ -68,25 +69,25 @@ public class StorageService implements KVService {
       deleteDataFromNode(http, params);
     }
     else {
-      http.sendResponseHeaders(405, 0);
+      http.sendResponseHeaders(SC_METHOD_NOT_ALLOWED, 0);
     }
 
   }
 
   private void deleteDataFromNode(HttpExchange http, QueryParams params) throws IOException {
     dao.delete(params.id);
-    http.sendResponseHeaders(202, 0);
+    http.sendResponseHeaders(SC_ACCEPTED, 0);
   }
 
   private void upsertDataFromNode(HttpExchange http, QueryParams params) throws IOException {
     byte[] data = getData(params.id, http);
     dao.upsert(params.id, data);
-    http.sendResponseHeaders(201, 0);
+    http.sendResponseHeaders(SC_CREATED, 0);
   }
 
   private void readDataFromNode(HttpExchange http, String id) throws IOException {
     byte[] data = dao.get(id);
-    http.sendResponseHeaders(200, data.length);
+    http.sendResponseHeaders(SC_OK, data.length);
     try (OutputStream out = http.getResponseBody()) {
       out.write(data);
     }
@@ -110,7 +111,7 @@ public class StorageService implements KVService {
       deleteData(http, params);
     }
     else {
-      http.sendResponseHeaders(405, 0);
+      http.sendResponseHeaders(SC_METHOD_NOT_ALLOWED, 0);
     }
   }
 
@@ -118,7 +119,7 @@ public class StorageService implements KVService {
     Replicas replicas = params.replicas;
     if (replicasExist(replicas) && !topology.isEmpty()) {
       deleteDataFromCluster(params.id, replicas);
-      http.sendResponseHeaders(202, 0);
+      http.sendResponseHeaders(SC_ACCEPTED, 0);
     }
     else {
       deleteDataFromNode(http, params);
@@ -135,7 +136,7 @@ public class StorageService implements KVService {
     if (replicasExist(replicas) && !topology.isEmpty()) {
       byte[] data = getData(params.id, http);
       upsertDataToCluster(params.id, data, replicas);
-      http.sendResponseHeaders(201, 0);
+      http.sendResponseHeaders(SC_CREATED, 0);
     }
     else {
       upsertDataFromNode(http, params);
@@ -199,7 +200,7 @@ public class StorageService implements KVService {
         delegate.handle(http);
       }
       catch (IllegalArgumentException e) {
-        sendError(400, http, e);
+        sendError(SC_BAD_REQUEST, http, e);
       }
       catch (DataDeletedException e) {
         sendError404(http, e);
@@ -208,10 +209,10 @@ public class StorageService implements KVService {
         sendError404(http, e);
       }
       catch (IOException e) {
-        sendError(500, http, e);
+        sendError(SC_INTERNAL_SERVER_ERROR, http, e);
       }
       catch (NotEnoughReplicasSentAcknowledge e) {
-        sendError(504, http, e);
+        sendError(SC_GATEWAY_TIMEOUT, http, e);
       }
       finally {
         http.close();
@@ -219,11 +220,11 @@ public class StorageService implements KVService {
     }
 
     private void sendError404(HttpExchange http, IdNotFoundException e) throws IOException {
-      http.sendResponseHeaders(404, 0);
+      http.sendResponseHeaders(SC_NOT_FOUND, 0);
     }
 
     private void sendError404(HttpExchange http, DataDeletedException e) throws IOException {
-      sendErrorResponse(404, http, e.getTombstone());
+      sendErrorResponse(SC_NOT_FOUND, http, e.getTombstone());
     }
 
     private void sendError(int statusCode, HttpExchange http, Exception e) throws IOException {
@@ -255,7 +256,7 @@ public class StorageService implements KVService {
   private void status(HttpExchange http) throws IOException {
     if ("GET".equals(http.getRequestMethod())) {
       String response = "ONLINE";
-      http.sendResponseHeaders(200, response.length());
+      http.sendResponseHeaders(SC_OK, response.length());
       try(OutputStream out = http.getResponseBody()) {
         out.write(response.getBytes());
       }

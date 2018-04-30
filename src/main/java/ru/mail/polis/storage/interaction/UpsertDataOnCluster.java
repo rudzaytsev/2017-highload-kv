@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
+import static org.apache.http.HttpStatus.*;
+
 /**
  * Represents insert or update data on cluster operation
  */
@@ -34,7 +36,7 @@ public class UpsertDataOnCluster extends AbstractClusterInteraction {
 
   @Override
   public boolean wellDone(int statusCode) {
-    return statusCode == 201;
+    return statusCode == SC_CREATED;
   }
 
   @Override

@@ -1,12 +1,15 @@
 package ru.mail.polis.storage.interaction;
 
 import org.apache.http.HttpResponse;
+
 import org.apache.http.client.fluent.Request;
 import ru.mail.polis.utils.Replicas;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
+
+import static org.apache.http.HttpStatus.*;
 
 /**
  * Represents delete data from cluster operation
@@ -33,7 +36,7 @@ public class DeleteDataFromCluster extends AbstractClusterInteraction {
 
   @Override
   public boolean wellDone(int statusCode) {
-    return statusCode == 202;
+    return statusCode == SC_ACCEPTED;
   }
 
   @Override
