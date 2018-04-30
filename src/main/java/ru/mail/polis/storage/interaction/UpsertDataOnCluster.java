@@ -5,6 +5,7 @@ import org.apache.http.client.fluent.Request;
 import ru.mail.polis.utils.Replicas;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -19,6 +20,11 @@ public class UpsertDataOnCluster extends AbstractClusterInteraction {
     super(replicas, topology);
     this.data = data;
     this.id = id;
+  }
+
+  @Override
+  protected HttpResponse selectResponseFromCluster(List<HttpResponse> responses) {
+    return responses.get(0);
   }
 
   @Override

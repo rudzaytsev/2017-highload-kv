@@ -5,6 +5,7 @@ import ru.mail.polis.utils.Replicas;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -29,6 +30,7 @@ public abstract class AbstractClusterInteraction implements ClusterInteraction {
     if (replicas.from <= 0) return null;
 
     List<HttpResponse> succeedResponses = new ArrayList<>();
+    int totalInternalRequests = 0;
     for (String nodeUrl : topology) {
 
       try {
@@ -41,20 +43,27 @@ public abstract class AbstractClusterInteraction implements ClusterInteraction {
       catch (IOException e) {
         e.printStackTrace();
       }
-
-      if (succeedResponses.size() == replicas.from) {
-        return succeedResponses.get(0);
+      finally {
+        totalInternalRequests++;
       }
 
+      if (succeedResponses.size() == replicas.from) {
+        return selectResponseFromCluster(succeedResponses);
+      }
+      if (totalInternalRequests == replicas.from) break;
     }
+
     if (succeedResponses.size() < replicas.ack) {
       throw new NotEnoughReplicasSentAcknowledge(
         format("For %s command  should response %d/%d but was %d/%d",
           httpMethod(), replicas.ack, replicas.from, succeedResponses.size(), replicas.from)
       );
     }
-    return null;
+    return selectResponseFromCluster(succeedResponses);
   }
+
+  protected abstract HttpResponse selectResponseFromCluster(List<HttpResponse> responses);
+
 
   protected abstract HttpResponse makeRequest(String nodeUrl) throws IOException;
 

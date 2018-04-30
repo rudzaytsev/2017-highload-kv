@@ -3,14 +3,17 @@ package ru.mail.polis.storage;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
-import java.util.NoSuchElementException;
+
 
 /**
  * Created by rudolph on 04.02.18.
  */
 public class StorageDao implements DAO {
 
+
   private final File dir;
+
+  private static final Tombstone TOMBSTONE = new Tombstone();
 
   public StorageDao(File dir) {
     this.dir = dir;
@@ -19,16 +22,19 @@ public class StorageDao implements DAO {
 
   @NotNull
   @Override
-  public byte[] get(@NotNull String id) throws NoSuchElementException, IllegalArgumentException, IOException {
+  public byte[] get(@NotNull String id) throws IdNotFoundException, DataDeletedException, IllegalArgumentException, IOException {
     File file = getFile(id);
     if (!file.exists())
-      throw new NoSuchElementException("Can't get data by id = " + id);
+      throw new IdNotFoundException("Can't get data by id = " + id);
 
     byte[] data = new byte[(int) file.length()];
     try (InputStream fis = new FileInputStream(file)){
       if (fis.read(data) != data.length)
         throw new IOException("Can't read file with name = " + id);
     }
+    if (TOMBSTONE.isSetIn(data))
+      throw new DataDeletedException("Value was deleted by id = " + id, TOMBSTONE.toString());
+
     return data;
   }
 
@@ -46,6 +52,8 @@ public class StorageDao implements DAO {
 
   @Override
   public void delete(@NotNull String id) throws IllegalArgumentException, IOException {
-    getFile(id).delete();
+    if (getFile(id).exists()) {
+      upsert(id, TOMBSTONE.toBytes());
+    }
   }
 }

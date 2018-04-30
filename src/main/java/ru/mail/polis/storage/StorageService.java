@@ -201,8 +201,11 @@ public class StorageService implements KVService {
       catch (IllegalArgumentException e) {
         sendError(400, http, e);
       }
-      catch (NoSuchElementException e) {
-        sendError(404, http, e);
+      catch (DataDeletedException e) {
+        sendError404(http, e);
+      }
+      catch (IdNotFoundException e) {
+        sendError404(http, e);
       }
       catch (IOException e) {
         sendError(500, http, e);
@@ -215,10 +218,21 @@ public class StorageService implements KVService {
       }
     }
 
+    private void sendError404(HttpExchange http, IdNotFoundException e) throws IOException {
+      http.sendResponseHeaders(404, 0);
+    }
+
+    private void sendError404(HttpExchange http, DataDeletedException e) throws IOException {
+      sendErrorResponse(404, http, e.getTombstone());
+    }
+
     private void sendError(int statusCode, HttpExchange http, Exception e) throws IOException {
-      String errorMsg = e.getMessage();
+      sendErrorResponse(statusCode, http, e.getMessage());
+    }
+
+    private void sendErrorResponse(int statusCode, HttpExchange http, String errorMsg) throws IOException {
       http.sendResponseHeaders(statusCode, errorMsg.length());
-      try(OutputStream out = http.getResponseBody()){
+      try (OutputStream out = http.getResponseBody()) {
         out.write(errorMsg.getBytes());
       }
     }
